@@ -8,6 +8,7 @@ import DocumentTemplates from './components/DocumentTemplates';
 import DocumentEditor from './components/DocumentEditor';
 import DocumentPreview from './components/DocumentPreview';
 import SavedDocuments from './components/SavedDocuments';
+import BlockEditor, { DocumentBlock } from './components/BlockEditor';
 
 export interface Letterhead {
   id: string;
@@ -38,6 +39,8 @@ export interface DocumentTemplate {
 export interface DocumentData {
   title: string;
   content: string;
+  blocks?: DocumentBlock[];
+  useBlockEditor?: boolean;
   recipient?: string;
   date: string;
   subject?: string;
@@ -66,6 +69,8 @@ function App() {
   const [documentData, setDocumentData] = useState<DocumentData>({
     title: '',
     content: '',
+    blocks: [],
+    useBlockEditor: false,
     date: new Date().toISOString().split('T')[0],
     template: {} as DocumentTemplate,
   });

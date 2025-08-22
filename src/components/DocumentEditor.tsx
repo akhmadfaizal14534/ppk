@@ -1,7 +1,8 @@
 import React from 'react';
-import { Calendar, User, FileText, MessageSquare, PenTool, Upload } from 'lucide-react';
+import { Calendar, User, FileText, MessageSquare, PenTool, Upload, ToggleLeft, ToggleRight } from 'lucide-react';
 import { DocumentData, DocumentTemplate } from '../App';
 import { getUserId } from '../utils/storage';
+import BlockEditor, { DocumentBlock } from './BlockEditor';
 
 interface DocumentEditorProps {
   documentData: DocumentData;
@@ -30,6 +31,42 @@ function DocumentEditor({ documentData, onDocumentChange, template }: DocumentEd
     });
   };
 
+  const handleBlocksChange = (blocks: DocumentBlock[]) => {
+    onDocumentChange({
+      ...documentData,
+      blocks
+    });
+  };
+
+  const toggleEditorMode = () => {
+    const newUseBlockEditor = !documentData.useBlockEditor;
+    
+    if (newUseBlockEditor && (!documentData.blocks || documentData.blocks.length === 0)) {
+      // Convert existing content to blocks
+      const blocks: DocumentBlock[] = [];
+      if (documentData.content) {
+        const paragraphs = documentData.content.split('\n\n').filter(p => p.trim());
+        paragraphs.forEach((paragraph, index) => {
+          blocks.push({
+            id: `block_${Date.now()}_${index}`,
+            type: 'paragraph',
+            content: paragraph.trim(),
+            order: index
+          });
+        });
+      }
+      onDocumentChange({
+        ...documentData,
+        useBlockEditor: newUseBlockEditor,
+        blocks
+      });
+    } else {
+      onDocumentChange({
+        ...documentData,
+        useBlockEditor: newUseBlockEditor
+      });
+    }
+  };
   const handleSignatureImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
@@ -302,7 +339,25 @@ function DocumentEditor({ documentData, onDocumentChange, template }: DocumentEd
       {/* Content Editor */}
       <div className="lg:col-span-2">
         <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h3 className="text-xl font-semibold text-slate-800 mb-6">Konten Dokumen</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-semibold text-slate-800">Konten Dokumen</h3>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-600">
+                {documentData.useBlockEditor ? 'Block Editor' : 'Text Editor'}
+              </span>
+              <button
+                onClick={toggleEditorMode}
+                className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                {documentData.useBlockEditor ? (
+                  <ToggleRight className="w-5 h-5 text-blue-500" />
+                ) : (
+                  <ToggleLeft className="w-5 h-5 text-slate-400" />
+                )}
+                <span className="text-sm">Block Editor</span>
+              </button>
+            </div>
+          </div>
           
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -310,21 +365,30 @@ function DocumentEditor({ documentData, onDocumentChange, template }: DocumentEd
               <span className="font-medium text-slate-800">{template.name}</span>
             </div>
 
-            <textarea
-              value={documentData.content}
-              onChange={(e) => handleFieldChange('content', e.target.value)}
-              placeholder={getPlaceholderByTemplate(template)}
-              rows={20}
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none font-mono text-sm leading-relaxed"
-              required
-            />
+            {documentData.useBlockEditor ? (
+              <BlockEditor
+                blocks={documentData.blocks || []}
+                onBlocksChange={handleBlocksChange}
+              />
+            ) : (
+              <>
+                <textarea
+                  value={documentData.content}
+                  onChange={(e) => handleFieldChange('content', e.target.value)}
+                  placeholder={getPlaceholderByTemplate(template)}
+                  rows={20}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none font-mono text-sm leading-relaxed"
+                  required
+                />
 
-            <div className="text-xs text-slate-500">
-              {documentData.content.length} karakter
-              {documentData.content.length > 0 && (
-                <span className="ml-2">• {Math.ceil(documentData.content.length / 500)} paragraf</span>
-              )}
-            </div>
+                <div className="text-xs text-slate-500">
+                  {documentData.content.length} karakter
+                  {documentData.content.length > 0 && (
+                    <span className="ml-2">• {Math.ceil(documentData.content.length / 500)} paragraf</span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
