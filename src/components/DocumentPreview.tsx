@@ -325,9 +325,50 @@ const handleDownloadDOC = async () => {
 
             {/* Document Content */}
             <div className="mb-12">
-              <div className="text-slate-800 leading-relaxed whitespace-pre-wrap text-justify text-base" style={{ lineHeight: '1.8' }}>
-                {documentData.content}
-              </div>
+              {documentData.useBlockEditor && documentData.blocks ? (
+                <div className="text-slate-800 leading-relaxed text-justify text-base space-y-4" style={{ lineHeight: '1.8' }}>
+                  {documentData.blocks.map((block) => {
+                    switch (block.type) {
+                      case 'paragraph':
+                        return (
+                          <p key={block.id} className="mb-4">
+                            {block.content}
+                          </p>
+                        );
+                      case 'heading':
+                        const HeadingTag = `h${block.level || 2}` as keyof JSX.IntrinsicElements;
+                        const headingClass = block.level === 1 ? 'text-2xl font-bold mb-4' :
+                                           block.level === 2 ? 'text-xl font-semibold mb-3' :
+                                           'text-lg font-medium mb-2';
+                        return (
+                          <HeadingTag key={block.id} className={headingClass}>
+                            {block.content}
+                          </HeadingTag>
+                        );
+                      case 'list':
+                        return (
+                          <ol key={block.id} className="list-decimal list-inside mb-4 space-y-1">
+                            {(block.listItems || []).map((item, index) => (
+                              <li key={index}>{item}</li>
+                            ))}
+                          </ol>
+                        );
+                      case 'quote':
+                        return (
+                          <blockquote key={block.id} className="border-l-4 border-blue-500 pl-4 italic text-slate-700 mb-4">
+                            "{block.content}"
+                          </blockquote>
+                        );
+                      default:
+                        return null;
+                    }
+                  })}
+                </div>
+              ) : (
+                <div className="text-slate-800 leading-relaxed whitespace-pre-wrap text-justify text-base" style={{ lineHeight: '1.8' }}>
+                  {documentData.content}
+                </div>
+              )}
             </div>
 
             {/* Signature Section */}
