@@ -312,6 +312,7 @@ function App() {
 
             <DocumentPreview 
               documentData={documentData} 
+             onDocumentChange={setDocumentData}
               onSaveDocument={handleSaveDocument}
             />
 

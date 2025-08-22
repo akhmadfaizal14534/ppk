@@ -69,56 +69,58 @@ const handleDownloadPDF = async () => {
     setIsGeneratingPDF(false);
   }
 };
-const handleDownloadDOC = async () => {
-  try {
-    const element = document.getElementById("document-content");
-    if (!element) return;
+  const handleDownloadDOC = async () => {
+    setIsGeneratingDOC(true);
+    try {
+      await generateDOC(documentData, documentData.blocks);
+    } catch (error) {
+      console.error('Error generating DOC:', error);
+      alert('Terjadi kesalahan saat membuat DOC');
+    } finally {
+      setIsGeneratingDOC(false);
+    }
+  };
 
-    // Clone biar nggak ganggu DOM asli
-    const clone = element.cloneNode(true) as HTMLElement;
+  const handleBlockDoubleClick = (blockId: string, content: string) => {
+    setEditingBlock(blockId);
+    setEditingContent(content);
+  };
 
-    // Cari semua img di dalam dokumen
-    const images = clone.querySelectorAll("img");
+  const handleTitleDoubleClick = () => {
+    setEditingTitle(true);
+    setTitleContent(documentData.title);
+  };
 
-    // Ubah semua src jadi base64
-    const promises = Array.from(images).map(async (img) => {
-      if (img.src.startsWith("data:")) return; // sudah base64
-
-      const response = await fetch(img.src);
-      const blob = await response.blob();
-      return new Promise<void>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          img.src = reader.result as string; // ganti src dengan base64
-          resolve();
-        };
-        reader.readAsDataURL(blob);
-      });
+  const saveBlockEdit = () => {
+    if (!editingBlock || !documentData.blocks) return;
+    
+    const updatedBlocks = documentData.blocks.map(block =>
+      block.id === editingBlock ? { ...block, content: editingContent } : block
+    );
+    
+    onDocumentChange({
+      ...documentData,
+      blocks: updatedBlocks
     });
+    
+    setEditingBlock(null);
+    setEditingContent('');
+  };
 
-    await Promise.all(promises);
-
-    // Bungkus ke format DOC
-    const content = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office"
-            xmlns:w="urn:schemas-microsoft-com:office:word"
-            xmlns="http://www.w3.org/TR/REC-html40">
-      <head><meta charset="utf-8"></head>
-      <body>${clone.innerHTML}</body>
-      </html>
-    `;
-
-    const blob = new Blob(["\ufeff", content], {
-      type: "application/msword;charset=utf-8",
+  const saveTitleEdit = () => {
+    onDocumentChange({
+      ...documentData,
+      title: titleContent
     });
+    setEditingTitle(false);
+  };
 
-    saveAs(blob, `${documentData.title || "dokumen"}.doc`);
-  } catch (error) {
-    console.error("Error generating DOC:", error);
-    alert("Terjadi kesalahan saat membuat DOC");
-  }
-};
-
+  const cancelEdit = () => {
+    setEditingBlock(null);
+    setEditingContent('');
+    setEditingTitle(false);
+    setTitleContent(documentData.title);
+  };
 
   const handlePrint = () => {
     window.print();
@@ -221,12 +223,13 @@ const handleDownloadDOC = async () => {
               {isGeneratingPDF ? 'Membuat PDF...' : 'Download PDF'}
             </button>
             <button 
-  onClick={handleDownloadDOC}
-  className="w-full px-4 py-3 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors flex items-center gap-2 justify-center"
->
-  <Download className="w-5 h-5" />
-  Download DOC
-</button>
+              onClick={handleDownloadDOC}
+              disabled={isGeneratingDOC}
+              className="w-full px-4 py-3 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors flex items-center gap-2 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-5 h-5" />
+              {isGeneratingDOC ? 'Membuat DOC...' : 'Download DOC'}
+            </button>
 
             
             <button 
@@ -255,6 +258,16 @@ const handleDownloadDOC = async () => {
           </div>
 
           <hr className="my-6" />
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+            <div className="flex items-center gap-2 text-blue-700 mb-2">
+              <Edit className="w-4 h-4" />
+              <span className="text-sm font-medium">Edit Mode</span>
+            </div>
+            <p className="text-xs text-blue-600">
+              Double-click pada judul atau konten untuk mengedit langsung
+            </p>
+          </div>
 
           <div className="space-y-3 text-sm">
             <div>
@@ -319,7 +332,30 @@ const handleDownloadDOC = async () => {
               )}
 
               <h1 className="text-3xl font-bold text-slate-800 mb-0 pb-0 text-center">
-                {documentData.title}
+                {editingTitle ? (
+                  <div className="inline-block">
+                    <input
+                      type="text"
+                      value={titleContent}
+                      onChange={(e) => setTitleContent(e.target.value)}
+                      onBlur={saveTitleEdit}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveTitleEdit();
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                      className="text-3xl font-bold text-slate-800 text-center bg-yellow-50 border-2 border-yellow-300 rounded px-2 py-1"
+                      autoFocus
+                    />
+                  </div>
+                ) : (
+                  <span 
+                    onDoubleClick={handleTitleDoubleClick}
+                    className="cursor-pointer hover:bg-yellow-50 hover:border-2 hover:border-yellow-300 rounded px-2 py-1 transition-colors"
+                    title="Double-click to edit"
+                  >
+                    {documentData.title}
+                  </span>
+                )}
               </h1>
             </div>
 
@@ -331,8 +367,29 @@ const handleDownloadDOC = async () => {
                     switch (block.type) {
                       case 'paragraph':
                         return (
-                          <p key={block.id} className="mb-4">
-                            {block.content}
+                          <p key={block.id} className="mb-4 group">
+                            {editingBlock === block.id ? (
+                              <textarea
+                                value={editingContent}
+                                onChange={(e) => setEditingContent(e.target.value)}
+                                onBlur={saveBlockEdit}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && e.ctrlKey) saveBlockEdit();
+                                  if (e.key === 'Escape') cancelEdit();
+                                }}
+                                className="w-full p-2 bg-yellow-50 border-2 border-yellow-300 rounded resize-none"
+                                rows={3}
+                                autoFocus
+                              />
+                            ) : (
+                              <span
+                                onDoubleClick={() => handleBlockDoubleClick(block.id, block.content)}
+                                className="cursor-pointer hover:bg-yellow-50 hover:border-2 hover:border-yellow-300 rounded px-2 py-1 transition-colors block"
+                                title="Double-click to edit"
+                              >
+                                {block.content}
+                              </span>
+                            )}
                           </p>
                         );
                       case 'heading':
@@ -341,22 +398,72 @@ const handleDownloadDOC = async () => {
                                            block.level === 2 ? 'text-xl font-semibold mb-3' :
                                            'text-lg font-medium mb-2';
                         return (
-                          <HeadingTag key={block.id} className={headingClass}>
-                            {block.content}
+                          <HeadingTag key={block.id} className={`${headingClass} group`}>
+                            {editingBlock === block.id ? (
+                              <input
+                                type="text"
+                                value={editingContent}
+                                onChange={(e) => setEditingContent(e.target.value)}
+                                onBlur={saveBlockEdit}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveBlockEdit();
+                                  if (e.key === 'Escape') cancelEdit();
+                                }}
+                                className="w-full p-2 bg-yellow-50 border-2 border-yellow-300 rounded"
+                                autoFocus
+                              />
+                            ) : (
+                              <span
+                                onDoubleClick={() => handleBlockDoubleClick(block.id, block.content)}
+                                className="cursor-pointer hover:bg-yellow-50 hover:border-2 hover:border-yellow-300 rounded px-2 py-1 transition-colors block"
+                                title="Double-click to edit"
+                              >
+                                {block.content}
+                              </span>
+                            )}
                           </HeadingTag>
                         );
                       case 'list':
                         return (
-                          <ol key={block.id} className="list-decimal list-inside mb-4 space-y-1">
+                          <ol key={block.id} className="list-decimal list-inside mb-4 space-y-1 group">
                             {(block.listItems || []).map((item, index) => (
-                              <li key={index}>{item}</li>
+                              <li key={index}>
+                                <span
+                                  onDoubleClick={() => handleBlockDoubleClick(`${block.id}-${index}`, item)}
+                                  className="cursor-pointer hover:bg-yellow-50 hover:border-2 hover:border-yellow-300 rounded px-1 py-0.5 transition-colors"
+                                  title="Double-click to edit"
+                                >
+                                  {item}
+                                </span>
+                              </li>
                             ))}
                           </ol>
                         );
                       case 'quote':
                         return (
-                          <blockquote key={block.id} className="border-l-4 border-blue-500 pl-4 italic text-slate-700 mb-4">
-                            "{block.content}"
+                          <blockquote key={block.id} className="border-l-4 border-blue-500 pl-4 italic text-slate-700 mb-4 group">
+                            {editingBlock === block.id ? (
+                              <textarea
+                                value={editingContent}
+                                onChange={(e) => setEditingContent(e.target.value)}
+                                onBlur={saveBlockEdit}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && e.ctrlKey) saveBlockEdit();
+                                  if (e.key === 'Escape') cancelEdit();
+                                }}
+                                className="w-full p-2 bg-yellow-50 border-2 border-yellow-300 rounded resize-none italic"
+                                rows={2}
+                                autoFocus
+                              />
+                            ) : (
+                              <span
+                                onDoubleClick={() => handleBlockDoubleClick(block.id, block.content)}
+                                className="cursor-pointer hover:bg-yellow-50 hover:border-2 hover:border-yellow-300 rounded px-2 py-1 transition-colors block"
+                                title="Double-click to edit"
+                              >
+                                "{block.content}"
+                              </span>
+                            )}
                           </blockquote>
                         );
                       default:

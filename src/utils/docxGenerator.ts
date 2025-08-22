@@ -3,6 +3,176 @@ import { saveAs } from 'file-saver';
 import { DocumentData } from '../App';
 import { DocumentBlock } from '../components/BlockEditor';
 
+// Generate DOC (HTML-based Word document)
+export const generateDOC = async (documentData: DocumentData, blocks?: DocumentBlock[]) => {
+  try {
+    // Create HTML content
+    let htmlContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; margin: 40px; }
+          h1 { font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 20px; }
+          h2 { font-size: 16pt; font-weight: bold; margin-top: 20px; margin-bottom: 10px; }
+          h3 { font-size: 14pt; font-weight: bold; margin-top: 15px; margin-bottom: 8px; }
+          p { margin-bottom: 12px; text-align: justify; }
+          .letterhead { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+          .letterhead img { max-height: 100px; margin-bottom: 10px; }
+          .letterhead h2 { font-size: 20pt; margin: 10px 0; }
+          .date { text-align: right; margin-bottom: 30px; }
+          .recipient { margin-bottom: 30px; }
+          .signature { text-align: right; margin-top: 50px; }
+          .signature img { max-height: 60px; margin: 10px 0; }
+          ol { margin-left: 20px; }
+          blockquote { border-left: 4px solid #007acc; padding-left: 15px; font-style: italic; margin: 15px 0; }
+        </style>
+      </head>
+      <body>
+    `;
+
+    // Add letterhead
+    if (documentData.letterhead) {
+      htmlContent += '<div class="letterhead">';
+      
+      if (documentData.letterhead.type === 'uploaded' && documentData.letterhead.imageUrl) {
+        htmlContent += `<img src="${documentData.letterhead.imageUrl}" alt="Letterhead" />`;
+      } else if (documentData.letterhead.type === 'manual') {
+        if (documentData.letterhead.logoBase64) {
+          htmlContent += `<img src="${documentData.letterhead.logoBase64}" alt="Logo" style="max-height: 80px;" />`;
+        }
+        htmlContent += `<h2>${documentData.letterhead.companyName || ''}</h2>`;
+        if (documentData.letterhead.address) {
+          htmlContent += `<p>${documentData.letterhead.address}</p>`;
+        }
+        const contactInfo = [];
+        if (documentData.letterhead.phone) contactInfo.push(`Tel: ${documentData.letterhead.phone}`);
+        if (documentData.letterhead.email) contactInfo.push(`Email: ${documentData.letterhead.email}`);
+        if (documentData.letterhead.website) contactInfo.push(`Web: ${documentData.letterhead.website}`);
+        if (contactInfo.length > 0) {
+          htmlContent += `<p>${contactInfo.join(' | ')}</p>`;
+        }
+      }
+      
+      htmlContent += '</div>';
+    }
+
+    // Add date
+    const formattedDate = new Date(documentData.date).toLocaleDateString('id-ID', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    htmlContent += `<div class="date">${formattedDate}</div>`;
+
+    // Add recipient info
+    if (documentData.template.type === 'letter' && documentData.recipient) {
+      htmlContent += `
+        <div class="recipient">
+          <p>Kepada Yth.</p>
+          <p><strong>${documentData.recipient}</strong></p>
+          <p>Di tempat</p>
+        </div>
+      `;
+    }
+
+    if (documentData.template.type === 'memo' && documentData.recipient) {
+      htmlContent += `
+        <div class="recipient">
+          <p><strong>Kepada:</strong> ${documentData.recipient}</p>
+          <p><strong>Dari:</strong> Manajemen</p>
+          <p><strong>Tanggal:</strong> ${formattedDate}</p>
+          ${documentData.subject ? `<p><strong>Perihal:</strong> ${documentData.subject}</p>` : ''}
+        </div>
+      `;
+    }
+
+    if (documentData.template.type === 'letter' && documentData.subject) {
+      htmlContent += `<div class="recipient"><p><strong>Perihal:</strong> ${documentData.subject}</p></div>`;
+    }
+
+    // Add title
+    htmlContent += `<h1>${documentData.title}</h1>`;
+
+    // Add content
+    if (blocks && blocks.length > 0) {
+      blocks.forEach((block) => {
+        switch (block.type) {
+          case 'paragraph':
+            if (block.content.trim()) {
+              htmlContent += `<p>${block.content}</p>`;
+            }
+            break;
+          case 'heading':
+            if (block.content.trim()) {
+              const level = block.level || 2;
+              htmlContent += `<h${level}>${block.content}</h${level}>`;
+            }
+            break;
+          case 'list':
+            if (block.listItems && block.listItems.length > 0) {
+              htmlContent += '<ol>';
+              block.listItems.forEach((item) => {
+                if (item.trim()) {
+                  htmlContent += `<li>${item}</li>`;
+                }
+              });
+              htmlContent += '</ol>';
+            }
+            break;
+          case 'quote':
+            if (block.content.trim()) {
+              htmlContent += `<blockquote>"${block.content}"</blockquote>`;
+            }
+            break;
+        }
+      });
+    } else {
+      const paragraphs = documentData.content.split('\n\n');
+      paragraphs.forEach((paragraph) => {
+        if (paragraph.trim()) {
+          htmlContent += `<p>${paragraph.trim()}</p>`;
+        }
+      });
+    }
+
+    // Add signature
+    if (documentData.signature && (documentData.signature.name || documentData.signature.position)) {
+      htmlContent += '<div class="signature">';
+      htmlContent += '<p>Hormat kami,</p>';
+      
+      if (documentData.signature.signatureImage) {
+        htmlContent += `<img src="${documentData.signature.signatureImage}" alt="Signature" />`;
+      } else {
+        htmlContent += '<br><br><br>';
+      }
+      
+      if (documentData.signature.name) {
+        htmlContent += `<p><strong><u>${documentData.signature.name}</u></strong></p>`;
+      }
+      if (documentData.signature.position) {
+        htmlContent += `<p>${documentData.signature.position}</p>`;
+      }
+      htmlContent += '</div>';
+    }
+
+    htmlContent += '</body></html>';
+
+    // Create blob and download
+    const blob = new Blob(['\ufeff', htmlContent], {
+      type: 'application/msword;charset=utf-8'
+    });
+    
+    saveAs(blob, `${documentData.title || 'dokumen'}.doc`);
+  } catch (error) {
+    console.error('Error generating DOC:', error);
+    throw error;
+  }
+};
+
 // Convert image URL to base64
 const imageUrlToBase64 = async (url: string): Promise<string> => {
   try {
